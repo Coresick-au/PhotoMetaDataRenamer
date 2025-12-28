@@ -24,7 +24,8 @@ public partial class App : Application
             ConfigureServices(services);
             _serviceProvider = services.BuildServiceProvider();
 
-            var mainWindow = new MainWindow
+            var settingsService = _serviceProvider.GetRequiredService<SettingsService>();
+            var mainWindow = new MainWindow(settingsService)
             {
                 DataContext = _serviceProvider.GetRequiredService<MainViewModel>()
             };

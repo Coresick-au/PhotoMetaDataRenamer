@@ -102,21 +102,21 @@
                     </StackPanel>
 
                     <!-- Pattern Selection -->
-                    <ComboBox Grid.Column="1" 
-                              ItemsSource="{Binding AvailablePatterns}"
-                              SelectedItem="{Binding SelectedPattern}"
-                              DisplayMemberPath="Name"
-                              materialDesign:HintAssist.Hint="Naming Pattern"
-                              Width="180"
-                              Margin="16,0,8,0"/>
-                              
-                    <!-- Custom Tag Input -->
-                    <TextBox Grid.Column="1"
-                             Text="{Binding CustomTag, UpdateSourceTrigger=PropertyChanged}"
-                             materialDesign:HintAssist.Hint="Custom Text (optional)"
-                             Width="140"
-                             Margin="200,0,0,0"
-                             VerticalAlignment="Center"/>
+                    <!-- Pattern Selection & Custom Text -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="16,0">
+                        <ComboBox ItemsSource="{Binding AvailablePatterns}"
+                                  SelectedItem="{Binding SelectedPattern}"
+                                  DisplayMemberPath="Name"
+                                  materialDesign:HintAssist.Hint="Naming Pattern"
+                                  Width="180"
+                                  Margin="0,0,16,0"
+                                  VerticalAlignment="Center"/>
+                                  
+                        <TextBox Text="{Binding CustomTag, UpdateSourceTrigger=PropertyChanged}"
+                                 materialDesign:HintAssist.Hint="Custom Text (optional)"
+                                 Width="160"
+                                 VerticalAlignment="Center"/>
+                    </StackPanel>
 
                     <!-- Action Buttons -->
                     <Button Grid.Column="2" 
@@ -137,6 +137,21 @@
                         <StackPanel Orientation="Horizontal">
                             <materialDesign:PackIcon Kind="RenameBox" VerticalAlignment="Center"/>
                             <TextBlock Text="Apply Renames" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Cancel Button (visible during processing) -->
+                    <Button Grid.Column="3" 
+                            Style="{StaticResource MaterialDesignOutlinedButton}"
+                            Command="{Binding CancelOperationCommand}"
+                            Visibility="{Binding CanCancel, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            Foreground="Orange"
+                            BorderBrush="Orange"
+                            Margin="8,0,0,0"
+                            ToolTip="Cancel current operation">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="Cancel" VerticalAlignment="Center"/>
+                            <TextBlock Text="Cancel" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
 
@@ -171,20 +186,41 @@
                             <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" 
                                                     Header="" Width="50"/>
                             
+                            <!-- Thumbnail Column -->
+                            <DataGridTemplateColumn Header="" Width="70" IsReadOnly="True">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Image Source="{Binding Thumbnail, Converter={StaticResource ByteArrayToImageConverter}}"
+                                               Width="60" Height="60" 
+                                               Stretch="UniformToFill"
+                                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            
                             <DataGridTextColumn Binding="{Binding FileName}" 
                                                 Header="Original Name" 
-                                                Width="200"
+                                                Width="150"
                                                 IsReadOnly="True"/>
                             
-                            <DataGridTextColumn Binding="{Binding SelectedSuggestion}" 
+                            <DataGridTextColumn Binding="{Binding SelectedSuggestion, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" 
                                                 Header="New Name" 
                                                 Width="250">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Foreground" Value="{DynamicResource SecondaryHueMidBrush}"/>
                                         <Setter Property="FontWeight" Value="Medium"/>
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
                                     </Style>
                                 </DataGridTextColumn.ElementStyle>
+                                <DataGridTextColumn.EditingElementStyle>
+                                    <Style TargetType="TextBox">
+                                        <Setter Property="Foreground" Value="{DynamicResource SecondaryHueMidBrush}"/>
+                                        <Setter Property="Background" Value="{DynamicResource MaterialDesign.Brush.Background}"/>
+                                        <Setter Property="BorderThickness" Value="0"/>
+                                        <Setter Property="Padding" Value="2"/>
+                                    </Style>
+                                </DataGridTextColumn.EditingElementStyle>
                             </DataGridTextColumn>
 
                             <DataGridTextColumn Binding="{Binding DateTakenDisplay}" 

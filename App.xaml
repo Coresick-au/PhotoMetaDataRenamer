@@ -13,6 +13,7 @@
             <!-- Converters -->
             <converters:InvertBooleanConverter x:Key="InvertBooleanConverter"/>
             <converters:InverseIntToVisibilityConverter x:Key="InverseIntToVisibilityConverter"/>
+            <converters:ByteArrayToImageConverter x:Key="ByteArrayToImageConverter"/>
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         </ResourceDictionary>
     </Application.Resources>

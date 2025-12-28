@@ -8,7 +8,7 @@ namespace PhotoRenamer.Services;
 /// </summary>
 public class ThumbnailService
 {
-    private const int ThumbnailSize = 64;
+    private const int ThumbnailSize = 100;
 
     /// <summary>
     /// Generates a thumbnail for an image file

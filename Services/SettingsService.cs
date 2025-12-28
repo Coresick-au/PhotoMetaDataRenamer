@@ -72,6 +72,16 @@ public class SettingsService
         _currentSettings.RecursiveScan = recursive;
         Save();
     }
+
+    public void UpdateWindowBounds(double left, double top, double width, double height, bool isMaximized)
+    {
+        _currentSettings.WindowLeft = left;
+        _currentSettings.WindowTop = top;
+        _currentSettings.WindowWidth = width;
+        _currentSettings.WindowHeight = height;
+        _currentSettings.WindowMaximized = isMaximized;
+        Save();
+    }
 }
 
 /// <summary>
@@ -82,6 +92,9 @@ public class UserSettings
     public string? LastFolderPath { get; set; }
     public string LastPatternId { get; set; } = "date_time";
     public bool RecursiveScan { get; set; } = true;
+    public double WindowLeft { get; set; } = 100;
+    public double WindowTop { get; set; } = 100;
     public double WindowWidth { get; set; } = 1200;
     public double WindowHeight { get; set; } = 800;
+    public bool WindowMaximized { get; set; } = false;
 }

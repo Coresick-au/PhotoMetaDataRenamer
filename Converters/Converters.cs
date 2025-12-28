@@ -42,3 +42,39 @@ public class InverseIntToVisibilityConverter : IValueConverter
         throw new NotImplementedException();
     }
 }
+
+/// <summary>
+/// Converts byte array to BitmapImage for thumbnail display
+/// </summary>
+public class ByteArrayToImageConverter : IValueConverter
+{
+    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is byte[] bytes && bytes.Length > 0)
+        {
+            try
+            {
+                var image = new System.Windows.Media.Imaging.BitmapImage();
+                using (var stream = new System.IO.MemoryStream(bytes))
+                {
+                    image.BeginInit();
+                    image.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                    image.StreamSource = stream;
+                    image.EndInit();
+                    image.Freeze();
+                }
+                return image;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}

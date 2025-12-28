@@ -19,6 +19,8 @@ public partial class MainViewModel : ObservableObject
     private readonly ISuggestionEngine _suggestionEngine;
     private readonly IFileManager _fileManager;
     private readonly SettingsService _settingsService;
+    private readonly ThumbnailService _thumbnailService;
+    private CancellationTokenSource? _cancellationTokenSource;
 
     [ObservableProperty]
     private ObservableCollection<PhotoFile> _photoFiles = new();
@@ -54,17 +56,20 @@ public partial class MainViewModel : ObservableObject
 
     public bool CanApplyRename => PhotoFiles.Any(p => p.IsSelected && !string.IsNullOrEmpty(p.SelectedSuggestion));
     public bool CanUndo => _fileManager.CanUndo();
+    public bool CanCancel => IsProcessing && _cancellationTokenSource != null && !_cancellationTokenSource.IsCancellationRequested;
 
     public MainViewModel(
         IMetadataReader metadataReader,
         ISuggestionEngine suggestionEngine,
         IFileManager fileManager,
-        SettingsService settingsService)
+        SettingsService settingsService,
+        ThumbnailService thumbnailService)
     {
         _metadataReader = metadataReader;
         _suggestionEngine = suggestionEngine;
         _fileManager = fileManager;
         _settingsService = settingsService;
+        _thumbnailService = thumbnailService;
 
         // Load available patterns
         foreach (var pattern in _suggestionEngine.GetAvailablePatterns())
@@ -119,7 +124,13 @@ public partial class MainViewModel : ObservableObject
         if (string.IsNullOrEmpty(SelectedFolder))
             return;
 
+        // Cancel any previous operation
+        _cancellationTokenSource?.Cancel();
+        _cancellationTokenSource = new CancellationTokenSource();
+        var cancellationToken = _cancellationTokenSource.Token;
+
         IsProcessing = true;
+        OnPropertyChanged(nameof(CanCancel));
         StatusMessage = "Scanning folder...";
         PhotoFiles.Clear();
         ProcessingProgress = 0;
@@ -135,12 +146,28 @@ public partial class MainViewModel : ObservableObject
             var files = await _fileManager.ScanDirectoryAsync(SelectedFolder, RecursiveScan, progress);
             TotalFiles = files.Count;
 
+            // Generate thumbnails in background
+            StatusMessage = $"Found {TotalFiles} photos. Generating thumbnails...";
+            int thumbnailCount = 0;
             foreach (var file in files)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                
+                file.Thumbnail = await _thumbnailService.GenerateThumbnailAsync(file.FilePath);
+                thumbnailCount++;
+                if (thumbnailCount % 5 == 0)
+                {
+                    StatusMessage = $"Generated thumbnails: {thumbnailCount}/{TotalFiles}";
+                    ProcessingProgress = (int)((thumbnailCount * 100.0) / TotalFiles);
+                }
                 PhotoFiles.Add(file);
             }
 
             StatusMessage = $"Found {TotalFiles} photos. Click 'Generate Suggestions' to continue.";
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = $"Operation cancelled. {PhotoFiles.Count} photos loaded.";
         }
         catch (Exception ex)
         {
@@ -149,7 +176,16 @@ public partial class MainViewModel : ObservableObject
         finally
         {
             IsProcessing = false;
+            OnPropertyChanged(nameof(CanCancel));
         }
+    }
+
+    [RelayCommand]
+    private void CancelOperation()
+    {
+        _cancellationTokenSource?.Cancel();
+        StatusMessage = "Cancelling operation...";
+        OnPropertyChanged(nameof(CanCancel));
     }
 
     [RelayCommand]
@@ -167,7 +203,13 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        // Cancel any previous operation
+        _cancellationTokenSource?.Cancel();
+        _cancellationTokenSource = new CancellationTokenSource();
+        var cancellationToken = _cancellationTokenSource.Token;
+
         IsProcessing = true;
+        OnPropertyChanged(nameof(CanCancel));
         ProcessingProgress = 0;
         var existingNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -175,6 +217,8 @@ public partial class MainViewModel : ObservableObject
         {
             for (int i = 0; i < PhotoFiles.Count; i++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                
                 var photo = PhotoFiles[i];
                 StatusMessage = $"Processing {i + 1} of {PhotoFiles.Count}: {photo.FileName}";
                 ProcessingProgress = (int)((i + 1.0) / PhotoFiles.Count * 100);
@@ -233,6 +277,11 @@ public partial class MainViewModel : ObservableObject
             StatusMessage = $"Generated suggestions using '{SelectedPattern.Name}' pattern for {PhotoFiles.Count} photos. Review and click 'Apply Renames'.";
             OnPropertyChanged(nameof(CanApplyRename));
         }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = $"Generation cancelled. {PhotoFiles.Count(p => !string.IsNullOrEmpty(p.SelectedSuggestion))} suggestions generated.";
+            OnPropertyChanged(nameof(CanApplyRename));
+        }
         catch (Exception ex)
         {
             StatusMessage = $"Error generating suggestions: {ex.Message}";
@@ -240,6 +289,7 @@ public partial class MainViewModel : ObservableObject
         finally
         {
             IsProcessing = false;
+            OnPropertyChanged(nameof(CanCancel));
         }
     }
 
@@ -250,13 +300,35 @@ public partial class MainViewModel : ObservableObject
         
         if (selectedPhotos.Count == 0)
         {
-            StatusMessage = "No photos selected for renaming.";
+            MessageBox.Show(
+                "No photos selected for renaming.\n\nPlease select photos using the checkboxes and ensure they have suggested names.",
+                "No Photos Selected",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
+        // Build detailed confirmation message
+        var confirmMessage = $"Ready to rename {selectedPhotos.Count} photo(s).\n\n" +
+                            $"Preview of changes:\n";
+        
+        var previewCount = Math.Min(5, selectedPhotos.Count);
+        for (int i = 0; i < previewCount; i++)
+        {
+            var p = selectedPhotos[i];
+            confirmMessage += $"  • {p.FileName} → {p.SelectedSuggestion}\n";
+        }
+        
+        if (selectedPhotos.Count > 5)
+        {
+            confirmMessage += $"  ... and {selectedPhotos.Count - 5} more\n";
+        }
+        
+        confirmMessage += "\nDo you want to proceed?";
+
         var result = MessageBox.Show(
-            $"Are you sure you want to rename {selectedPhotos.Count} photos?",
-            "Confirm Rename",
+            confirmMessage,
+            "Confirm Rename Operation",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
 
@@ -283,12 +355,10 @@ public partial class MainViewModel : ObservableObject
 
             var results = await _fileManager.RenameFilesAsync(operations, progress);
 
-            var success = results.Count(r => r.Success);
-            var failed = results.Count(r => !r.Success);
+            var successResults = results.Where(r => r.Success).ToList();
+            var failedResults = results.Where(r => !r.Success).ToList();
 
-            StatusMessage = $"Renamed {success} files successfully. {failed} failed.";
-
-            // Update file list with new names
+            // Update file list with new names for successful operations
             foreach (var (photo, opResult) in selectedPhotos.Zip(results))
             {
                 if (opResult.Success)
@@ -298,10 +368,40 @@ public partial class MainViewModel : ObservableObject
                 }
             }
 
+            // Show detailed result summary
+            var resultMessage = $"Operation Complete!\n\n" +
+                               $"✓ Successfully renamed: {successResults.Count}\n";
+            
+            if (failedResults.Count > 0)
+            {
+                resultMessage += $"✗ Failed: {failedResults.Count}\n\n" +
+                                "Failed operations:\n";
+                foreach (var fail in failedResults.Take(5))
+                {
+                    resultMessage += $"  • {Path.GetFileName(fail.SourcePath)}: {fail.ErrorMessage}\n";
+                }
+                if (failedResults.Count > 5)
+                {
+                    resultMessage += $"  ... and {failedResults.Count - 5} more errors\n";
+                }
+            }
+
+            MessageBox.Show(
+                resultMessage,
+                failedResults.Count > 0 ? "Rename Complete (with errors)" : "Rename Complete",
+                MessageBoxButton.OK,
+                failedResults.Count > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
+
+            StatusMessage = $"Renamed {successResults.Count} files. {failedResults.Count} failed.";
             OnPropertyChanged(nameof(CanUndo));
         }
         catch (Exception ex)
         {
+            MessageBox.Show(
+                $"An error occurred during the rename operation:\n\n{ex.Message}\n\nSome files may have been renamed. Use Undo to revert changes.",
+                "Error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
             StatusMessage = $"Error renaming files: {ex.Message}";
         }
         finally
