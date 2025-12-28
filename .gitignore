@@ -1,0 +1,34 @@
+# Build results
+bin/
+obj/
+[Oo]ut/
+[Bb]uild[Ll]og.*
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# NuGet
+packages/
+*.nupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Rider
+.idea/
+*.sln.iml
